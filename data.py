@@ -7,35 +7,42 @@ import pytz
 from random import randint
 import torch
 import torch.nn.functional as F
+from math import floor, sqrt
 
 class ChartDataset(Dataset):
-    def __init__(self, files, tf=512):
+    def __init__(self, files, tf=512, multiplier=1):
+        self.multiplier = multiplier
         self.tf = tf
         self.mms = MinMaxScaler()
         self.files = [None] * len(files)
         self.pump_range = [x[1] for x in files]
 
         for i, file in enumerate(files):
-            self.files[i] = pd.read_csv(file[0])
+            self.files[i] = pd.read_csv(file[0])[['timestamp', 'side', 'price', 'amount']]
+            self.files[i]['side'] = self.files[i]['side'].apply(lambda x: 1 if x == 'buy' else 0)
 
     def __getitem__(self, i):
-        x = randint(0, len(self.files[i]) - self.tf)
+        idx = floor(i / self.multiplier)
 
-        vals = self.files[i][['timestamp', 'price', 'amount']].iloc[x:x+self.tf].values
+        x = randint(0, len(self.files[idx]) - self.tf)
 
-        final_ts = vals[-1][0]
+        vals = self.files[idx].iloc[x:x+self.tf].copy()
 
-        pumping = 1 if (final_ts >= self.pump_range[i][0] and final_ts <= self.pump_range[i][1]) else 0
+        final_ts = vals.values[-1][0]
+
+        pumping = 1 if (final_ts >= self.pump_range[idx][0] and final_ts <= self.pump_range[idx][1]) else 0
+
+        vals[['timestamp', 'price', 'amount']] = self.mms.fit_transform(vals[['timestamp', 'price', 'amount']])
 
         return {
-            "seq": self.mms.fit_transform(vals),
+            "seq": vals.values,
             "pumping": pumping
         }
 
     def __len__(self):
-        return len(self.files)
+        return len(self.files) * self.multiplier
 
-def get_data_loaders(landmarks_file, charts_dir, bs=16):
+def get_data_loaders(landmarks_file, charts_dir, bs=16, multiplier=1):
     landmarks = pd.read_csv(landmarks_file)
     pumps = landmarks[landmarks['label'] == 1]
 
@@ -55,7 +62,7 @@ def get_data_loaders(landmarks_file, charts_dir, bs=16):
 
     X_train, X_val = train_test_split(landmarks_map, train_size=0.7, random_state=42)
 
-    train_ds = ChartDataset(X_train)
-    val_ds = ChartDataset(X_val)
+    train_ds = ChartDataset(X_train, multiplier=multiplier)
+    val_ds = ChartDataset(X_val, multiplier=multiplier)
 
-    return DataLoader(train_ds, batch_size=bs, shuffle=False), DataLoader(val_ds, batch_size=bs*2)
+    return DataLoader(train_ds, batch_size=bs, shuffle=True), DataLoader(val_ds, batch_size=bs*2)
