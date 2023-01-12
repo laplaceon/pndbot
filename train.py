@@ -17,11 +17,13 @@ def compute_accuracy(pred, labels):
     return {
         "acc": accuracy_score(labels, pred),
         "f1": f1_score(labels, pred),
-        "roc": roc_auc_score(labels, pred)
+        "roc": 0
     }
 
 def train_loop(model, opt, train_dl, val_dl, epochs):
     for i in range(epochs):
+        print(f"Epoch {i+1}")
+
         model.eval()
         valid_stats = 1 * [[0, 0, 0, 0]]
         for batch in tqdm(val_dl, position=0, leave=True):
@@ -31,7 +33,7 @@ def train_loop(model, opt, train_dl, val_dl, epochs):
                 labels = batch['pumping'].long().cuda()
 
                 preds = model(inputs, next)
-                # print(labels)
+                # print(preds, labels)
 
                 loss_0 = F.cross_entropy(preds[0], labels)
 
@@ -64,9 +66,9 @@ def train_loop(model, opt, train_dl, val_dl, epochs):
         nb = len(train_dl)
         print(f"Training loss: {training_loss/nb}")
 
-train_dl, val_dl = get_data_loaders('./data/chart_landmarks.csv', './data/charts/', bs=128, multiplier=256)
+train_dl, val_dl = get_data_loaders('./data/chart_landmarks_precise.csv', './data/charts/', bs=64, multiplier=64)
 model = PndModel()
 model.cuda()
-opt = Adam(model.parameters(), lr=1e-4)
+opt = Adam(model.parameters(), lr=1e-3)
 
 train_loop(model, opt, train_dl, val_dl, 200)

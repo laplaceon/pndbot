@@ -17,7 +17,7 @@ class PumpDiscriminator(nn.Module):
         return self.linear1(out)
 
 class TradeSequenceEncoder(nn.Module):
-    def __init__(self, d_m, n_rnn, heads, t_dim, seq_len, kernel):
+    def __init__(self, d_m, n_rnn, heads, t_dim, kernel):
         super(TradeSequenceEncoder, self).__init__()
         self.n_rnn = n_rnn
         self.d_m = d_m
@@ -44,9 +44,9 @@ class TradeSequenceEncoder(nn.Module):
         return encoded
 
 class PndModel(nn.Module):
-    def __init__(self, n_rnn=1, nheads=4, d_m=32, t_dim=36, seq_len=528, kernel=8):
+    def __init__(self, n_rnn=1, nheads=4, d_m=32, t_dim=36, kernel=8):
         super(PndModel, self).__init__()
-        self.encoder = TradeSequenceEncoder(d_m, n_rnn, nheads, t_dim, seq_len, kernel)
+        self.encoder = TradeSequenceEncoder(d_m, n_rnn, nheads, t_dim, kernel)
         dec_layer = nn.TransformerDecoderLayer(d_model=4, nhead=nheads, dim_feedforward=d_m)
         self.decoder = nn.TransformerDecoder(dec_layer, num_layers=n_rnn)
         self.classifiers = nn.ModuleList([nn.Linear(in_features=t_dim, out_features=2), nn.Linear(in_features=t_dim, out_features=4)])
