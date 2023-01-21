@@ -6,7 +6,7 @@ import numpy as np
 from torch.optim import Adam
 
 from data import get_data_loaders
-from model import PumpDiscriminator, PndModel
+from model import PndModel
 
 from tqdm import tqdm
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
@@ -32,12 +32,12 @@ def train_loop(model, opt, train_dl, val_dl, epochs):
                 next = batch['next'].float().cuda()
                 labels = batch['pumping'].long().cuda()
 
-                preds = model(inputs, next)
+                preds = model(inputs)
                 # print(preds, labels)
 
-                loss_0 = F.cross_entropy(preds[0], labels)
+                loss_0 = F.cross_entropy(preds, labels)
 
-                scores = compute_accuracy(preds[0].detach().cpu().numpy(), labels.detach().cpu().numpy())
+                scores = compute_accuracy(preds.detach().cpu().numpy(), labels.detach().cpu().numpy())
 
                 valid_stats[0] = [a + b for a, b in zip(valid_stats[0], [loss_0.item(), scores["acc"], scores["f1"], scores["roc"]])]
                 # valid_stats[1] = [a + b for a, b in zip(valid_stats[1], [0, 0, 0, 0])]
@@ -55,8 +55,8 @@ def train_loop(model, opt, train_dl, val_dl, epochs):
             next = batch['next'].float().cuda()
             labels = batch['pumping'].long().cuda()
 
-            preds = model(inputs, next)
-            loss = F.cross_entropy(preds[0], labels) + F.mse_loss(preds[1].permute(1, 0, 2), next)
+            preds = model(inputs)
+            loss = F.cross_entropy(preds, labels)
 
             training_loss += loss.item()
 
@@ -66,7 +66,7 @@ def train_loop(model, opt, train_dl, val_dl, epochs):
         nb = len(train_dl)
         print(f"Training loss: {training_loss/nb}")
 
-train_dl, val_dl = get_data_loaders('./data/chart_landmarks_precise.csv', './data/charts/', bs=64, multiplier=64)
+train_dl, val_dl = get_data_loaders('../data/chart_landmarks_auto.csv', '../data/full/binance/', bs=64, multiplier=64)
 model = PndModel()
 model.cuda()
 opt = Adam(model.parameters(), lr=1e-3)

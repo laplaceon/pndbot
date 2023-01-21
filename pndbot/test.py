@@ -5,13 +5,13 @@ import numpy as np
 
 from torch.optim import Adam
 
-from data import get_data_loaders
-from model import PumpDiscriminator, PndModel
+from pndbot.data import get_data_loaders
+from pndbot.model import PumpDiscriminator, PndModel
 
 from tqdm import tqdm
 from sklearn.metrics import f1_score, roc_auc_score, accuracy_score
 
-train_dl, val_dl = get_data_loaders('./data/chart_landmarks_precise.csv', './data/charts/', bs=128, multiplier=256)
+train_dl, val_dl = get_data_loaders('../data/chart_landmarks_auto.csv', '../data/full/binance/', bs=128, multiplier=256)
 
 # model = PndModel()
 # model.cuda()
