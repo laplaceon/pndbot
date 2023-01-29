@@ -2,13 +2,62 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
+
+from anomaly_transformer import AnomalyTransformer
+
+class PndModelT(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+        # self.conv1 = nn.Conv1d(4, 16, 3)
+        self.at = AnomalyTransformer(1000, 4, 4, 0.0001, device)
+    
+    def forward(self, x):
+        # out = F.relu(self.conv1(x))
+        out = self.at(x)
+
+        return out
+    
+    def loss_fn(self, preds, y):
+        return self.at.loss_fn(preds, y)
+
+class PndModelMLP(nn.Module):
+    def __init__(
+        self
+    ):
+        super().__init__()
+
+        self.linear1 = nn.Linear(2, 8)
+        self.linear2 = nn.Linear(8, 2)
+    
+    def forward(self, x):
+        out = F.relu(self.linear1(x))
+        out = self.linear2(out)
+        return out
+
+class PndModelLSTM(nn.Module):
+    def __init__(
+        self
+    ):
+        super().__init__()
+
+        self.lstm = nn.LSTM(input_size=4, hidden_size=64, num_layers=3)
+        self.fc = nn.Linear(64, 2)
+    
+    def forward(self, x):
+        out, _ = self.lstm(x.permute(1, 0, 2))
+        out = self.fc(out[-1])
+        return out
+
 class PndModel(nn.Module):
     def __init__(
         self,
-        h_dims=(4, 6, 8),
+        h_dims=(7, 16, 16, 16),
         scales=(2, 2, 2),
-        blocks_per_stages=(1, 1, 1),
-        layers_per_blocks=(2, 2, 2)
+        blocks_per_stages=(2, 2, 2)
     ):
         super().__init__()
 
@@ -16,18 +65,21 @@ class PndModel(nn.Module):
         for i in range(len(h_dims)-1):
             in_channels, out_channels = h_dims[i], h_dims[i+1]
 
-            encoder_stage = ResStage(in_channels, out_channels, 3, scales[i], blocks_per_stages[i], layers_per_blocks[i])
+            encoder_stage = ResStage(in_channels, out_channels, 9, scales[i], blocks_per_stages[i])
             stages.append(encoder_stage)
 
         self.conv = nn.Sequential(*stages)
-        self.lstm = nn.LSTM(input_size=h_dims[-1], hidden_size=16, num_layers=2)
+        self.lstm1 = nn.LSTM(input_size=h_dims[-1], hidden_size=h_dims[-1], num_layers=2)
+        self.drop = nn.Dropout(p=0.1)
 
-        self.linear1 = nn.Linear(in_features=16, out_features=2)
+        self.linear1 = nn.Linear(in_features=h_dims[-1], out_features=2)
 
     def forward(self, x):
-        out = self.conv(x.permute(0, 2, 1))
-        out, _ = self.lstm(out.permute(2, 0, 1))
-        return self.linear1(out[-1])
+        h = self.conv(x.permute(0, 2, 1))
+        out1, _ = self.lstm1(h.permute(2, 0, 1))
+        out1 = self.linear1(self.drop(out1[-1]))
+        
+        return out1
 
 class ResStage(nn.Module):
     def __init__(
@@ -36,12 +88,13 @@ class ResStage(nn.Module):
         out_channels,
         kernel,
         scale,
-        num_blocks,
-        layers_per_block
+        num_blocks
     ):
         super().__init__()
 
         self.downscale = nn.Conv1d(in_channels, out_channels, kernel_size=scale+1, stride=scale, padding=1)
+
+        # self.attn = nn.MultiheadAttention(out_channels, 4, dropout=0.1, batch_first=True)
 
         blocks = []
         for i in range(num_blocks):
@@ -50,8 +103,7 @@ class ResStage(nn.Module):
                     out_channels,
                     out_channels,
                     kernel,
-                    layers_per_block,
-                    groups=2
+                    groups=4
                 )
             )
 
@@ -59,6 +111,12 @@ class ResStage(nn.Module):
 
     def forward(self, x):
         out = self.downscale(x)
+
+        # out = out.permute(0, 2, 1)
+        # attn, _ = self.attn(out, out, out)
+        # out += attn
+        # out.permute(0, 2, 1)
+
         out = self.blocks(out)
         return out
 
@@ -70,25 +128,30 @@ class ResBlock(nn.Module):
         kernel=3,
         dilation=1,
         groups=8,
-        activation=nn.SiLU()
+        activation=nn.ReLU()
     ):
         super().__init__()
 
-        self.conv1 = DepthwiseSeparableConv(in_channels, out_channels, kernel_size=kernel, dilation=dilation, padding="same")
-        self.conv2 = DepthwiseSeparableConv(out_channels, out_channels, kernel_size=kernel, dilation=dilation, padding="same")
-
-        self.norm1 = nn.BatchNorm1d(out_channels)
-        self.norm2 = nn.BatchNorm1d(out_channels)
+        self.conv1 = nn.Sequential(
+            DepthwiseSeparableConv(in_channels, out_channels, kernel_size=kernel, dilation=dilation, padding="same"),
+            nn.GroupNorm(groups, out_channels),
+            activation
+        )
+        self.conv2 = nn.Sequential(
+            DepthwiseSeparableConv(out_channels, out_channels, kernel_size=kernel, dilation=dilation, padding="same"),
+            nn.GroupNorm(groups, out_channels)
+        )
 
         self.conv_res = nn.Conv1d(in_channels, out_channels, kernel_size=1, dilation=dilation, padding="same")
 
         self.activation = activation
 
     def forward(self, x):
-        h = F.silu(self.norm1(self.conv1(x)))
-        h = self.norm2(self.conv2(h))
+        residual = x
+        h = self.conv1(x)
+        h = self.conv2(h)
 
-        return self.activation(h + self.conv_res(x))
+        return self.activation(h + residual)
 
 class DepthwiseSeparableConv(nn.Module):
     def __init__(
