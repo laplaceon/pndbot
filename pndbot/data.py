@@ -41,7 +41,7 @@ class ChartDataset(Dataset):
     def __getitem__(self, i):
         idx = floor(i / self.multiplier)
 
-        if randrange(10) >= 4:
+        if randrange(10) >= 5:
             x = randint(0, len(self.files[idx]) - self.tf - 1)
             # x = randint(0, len(self.files[idx]) - self.tf - 1 - self.next_len)
             # print(len(self.files[idx]))
@@ -58,7 +58,7 @@ class ChartDataset(Dataset):
         # next[['timestamp', 'price', 'amount']] = self.mms.transform(next[['timestamp', 'price', 'amount']])
 
         seq = vals
-        seq[['price', 'amount']] = minmax_scale(vals[['price', 'amount']], feature_range=(-1, 1))
+        seq[['price', 'amount']] = minmax_scale(vals[['price', 'amount']])
 
         # print(seq)
 

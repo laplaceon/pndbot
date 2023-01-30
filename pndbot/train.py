@@ -87,7 +87,7 @@ def train_loop(model, opt, train_dl, val_dl, chk):
             print("Early stopping")
             break
 
-train_dl, val_dl = get_data_loaders('../data/chart_landmarks_auto_overlapped.csv', '../data/full/binance/', bs=128, multiplier=192)
+train_dl, val_dl = get_data_loaders('../data/chart_landmarks_auto_overlapped.csv', '../data/full/binance/', bs=256, multiplier=192)
 model = model.PndModel()
 model.cuda()
 opt = Adam(model.parameters(), lr=5e-5)

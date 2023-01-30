@@ -4,26 +4,6 @@ import torch.nn.functional as F
 
 from positional_encodings.torch_encodings import PositionalEncoding1D, Summer
 
-from anomaly_transformer import AnomalyTransformer
-
-class PndModelT(nn.Module):
-    def __init__(self):
-        super().__init__()
-
-        device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
-        # self.conv1 = nn.Conv1d(4, 16, 3)
-        self.at = AnomalyTransformer(1000, 4, 4, 0.0001, device)
-    
-    def forward(self, x):
-        # out = F.relu(self.conv1(x))
-        out = self.at(x)
-
-        return out
-    
-    def loss_fn(self, preds, y):
-        return self.at.loss_fn(preds, y)
-
 class PndModelMLP(nn.Module):
     def __init__(
         self
@@ -65,7 +45,7 @@ class PndModel(nn.Module):
         for i in range(len(h_dims)-1):
             in_channels, out_channels = h_dims[i], h_dims[i+1]
 
-            encoder_stage = ResStage(in_channels, out_channels, 9, scales[i], blocks_per_stages[i])
+            encoder_stage = ResStage(in_channels, out_channels, 5, scales[i], blocks_per_stages[i])
             stages.append(encoder_stage)
 
         self.conv = nn.Sequential(*stages)
